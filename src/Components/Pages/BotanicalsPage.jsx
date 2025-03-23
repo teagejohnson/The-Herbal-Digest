@@ -1,0 +1,468 @@
+import React, {useEffect, useState} from 'react';
+import Carousel from 'react-material-ui-carousel';
+import {Link, useParams} from 'react-router-dom';
+import {Helmet} from 'react-helmet-async';
+
+import {collection, doc, getDoc, onSnapshot, query, updateDoc, where} from 'firebase/firestore';
+
+import {Box, Fade, Typography} from '@mui/material';
+
+import NotFound from './NotFound.jsx';
+
+import db from '../../firebase.js';
+
+
+const BotanicalsPage = () => {    
+    const width = useState(window.innerWidth)[0];
+    const height = useState(window.innerHeight)[0];
+
+    const windowWidth = width >= 750 ? '100vw' : width;
+    
+    const {slug} = useParams();
+
+    const [data, setData] = useState('loading');
+    const [shop, setShop] = useState('loading');
+    const [clicks, setClicks] = useState('loading');
+
+    const [page1, setPage1] = useState(false);
+
+    const handleClickLink = async (event, key, href_block) => {
+        event.preventDefault();
+
+        var value = await (await getDoc(doc(db, 'clicks', 'count'))).data()[key] + 1;
+
+        if (isNaN(value)) {
+            value = 1;
+        }
+
+        await updateDoc(doc(db, 'clicks', 'count'), {[key]: value});
+
+        const href = href_block.split('href="')[1].split('"')[0];
+
+        window.open(href, '_blank');
+    };
+
+    const handleShopFilter = (item) => {
+        const phrases = item[1].tags.concat(item[1].title, item[1].brand);
+
+        var keywords = []
+
+        phrases.map((i) => (
+            i.split(' ').map((j) => (
+                keywords.push(j.trim().toLowerCase())
+            ))
+        ));
+
+        var filter = false;
+
+        data.tags.map((i) => {
+            var search_phrase = [];
+
+            i.split(' ').map((i) => (
+                search_phrase.push(i.trim().toLowerCase())
+            ));
+
+            if (search_phrase.filter(x => keywords.includes(x)).length === search_phrase.length) {
+                filter = true;
+
+                return () => {
+
+                };
+            }
+
+            return () => {
+
+            };
+        })
+
+        return filter;
+    };
+
+    const handleSortPopular = (a, b) => {
+        var a_clicks = clicks[a[0]];
+        var b_clicks = clicks[b[0]];
+
+        if (isNaN(a_clicks)) {
+            a_clicks = 0;
+        }
+
+        if (isNaN(b_clicks)) {
+            b_clicks = 0;
+        }
+
+        if (a_clicks < b_clicks) {
+            return 1;
+         }
+         
+        else if (a_clicks > b_clicks) {
+            return -1;
+        }
+
+        else {
+            return handleSortAz(a, b)
+        }
+    };
+
+    const handleSortAz = (a, b) => {
+        if (a[1].title > b[1].title) {
+            return 1;
+         }
+         
+        else if (a[1].title < b[1].title) {
+            return -1;
+        }
+
+        else {
+            return 0;
+        }
+    };
+
+    useEffect(() => {
+        onSnapshot(query(collection(db, 'botanicals'), where('slug', '==', slug)), (snapshot) => {
+            setData(snapshot.docs.map(document => document.data())[0]);
+        });
+
+        onSnapshot(doc(db, 'glossary', 'shop'), (doc) => {
+            setShop(doc.data());
+        });
+
+        onSnapshot(doc(db, 'clicks', 'count'), (doc) => {
+            setClicks(doc.data());
+        });
+
+        return () => {
+
+        };
+
+    }, [slug]);
+
+    if (data === 'loading' || shop === 'loading') {
+        return null;
+    }
+
+    else if (!data) {
+        return <NotFound />;
+    }
+
+    const shop_map = {};
+    const shop_list = [];
+
+    try {
+        Object.entries(shop).filter(x => handleShopFilter(x)).sort((a, b) => handleSortPopular(a, b)).slice(0, 30).map((i, index) => {
+            try {
+                width >= 750 ?
+                    shop_map[Math.floor(index / 3)].push(
+                        <Box style = {{width: '17.5vw', height: '25vw', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', alignItems: 'center'}} m = '2.25vw'>
+                            <Link onClick = {(event) => handleClickLink(event, i[0], i[1].html_block)} style = {{color: 'black', textDecoration: 'none'}} sx = {{':hover': {filter: 'drop-shadow(0px 0px 10px rgba(23, 23, 23, 0.70))'}}}>
+                                <Box style = {{width: '17.5vw', height: '17.5vw'}} sx = {{filter: 'drop-shadow(0px 0px 10px rgba(23, 23, 23, 0.30))', ':hover': {filter: 'drop-shadow(0px 0px 10px rgba(23, 23, 23, 0.70))'}}} >
+                                    <img src = {i[1].image} alt = {i[1].title} style = {{width: '17.5vw', height: '17.5vw', objectFit: 'cover', objectPosition: 'center', borderRadius: 25}} />
+                                </Box>
+                            </Link>
+                            <Box style = {{width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', alignItems: 'center'}}>
+                                <Box style = {{width: '95%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', alignItems: 'center'}} >
+                                    <Typography variant = 'body1' align = 'center' mt = '3%' mb = '3%'>
+                                        {i[1].title}
+                                    </Typography>
+                                    <Typography variant = 'body2' align = 'center'>
+                                        {i[1].brand}
+                                    </Typography>
+                                </Box>
+                            </Box>
+                        </Box>
+                    )
+                :
+                    shop_list.push(
+                        <Box key = {index} style = {{width: width * 0.35, height: width * 0.50, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', alignItems: 'center'}} ml = {`${width * 0.25 + 'px'}`} mt = '4.5%'>
+                            <Link onClick = {(event) => handleClickLink(event, i[0], i[1].html_block)} style = {{color: 'black', textDecoration: 'none'}}>
+                                <Box style = {{width: width * 0.35, height: width * 0.35}} sx = {{filter: 'drop-shadow(0px 0px 10px rgba(23, 23, 23, 0.05))'}}>
+                                    <img src = {i[1].image} alt = {i[1].title} style = {{width: width * 0.35, height: width * 0.35, objectFit: 'cover', objectPosition: 'center', borderRadius: 25}} />
+                                </Box>
+                            </Link>
+                            <Box style = {{width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', alignItems: 'center'}}>
+                                <Box style = {{width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', alignItems: 'center'}} >
+                                    <Typography variant = 'body1' align = 'center' mt = '3%' mb = '3%'>
+                                        {i[1].title}
+                                    </Typography>
+                                    <Typography variant = 'body2' align = 'center'>
+                                        {i[1].brand}
+                                    </Typography>
+                                </Box>
+                            </Box>
+                        </Box>
+                    )
+            }
+
+            catch {
+                shop_map[Math.floor(index / 3)] = [
+                    <Box style = {{width: '17.5vw', height: '25vw', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', alignItems: 'center'}} m = '2.25vw'>
+                        <Link onClick = {(event) => handleClickLink(event, i[0], i[1].html_block)} style = {{color: 'black', textDecoration: 'none'}} sx = {{':hover': {filter: 'drop-shadow(0px 0px 10px rgba(23, 23, 23, 0.70))'}}}>
+                            <Box style = {{width: '17.5vw', height: '17.5vw'}} sx = {{filter: 'drop-shadow(0px 0px 10px rgba(23, 23, 23, 0.30))', ':hover': {filter: 'drop-shadow(0px 0px 10px rgba(23, 23, 23, 0.70))'}}} >
+                                <img src = {i[1].image} alt = {i[1].title} style = {{width: '17.5vw', height: '17.5vw', objectFit: 'cover', objectPosition: 'center', borderRadius: 25}} />
+                            </Box>
+                        </Link>
+                        <Box style = {{width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', alignItems: 'center'}}>
+                            <Box style = {{width: '95%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', alignItems: 'center'}} >
+                                <Typography variant = 'body1' align = 'center' mt = '3%' mb = '3%'>
+                                    {i[1].title}
+                                </Typography>
+                                <Typography variant = 'body2' align = 'center'>
+                                    {i[1].brand}
+                                </Typography>
+                            </Box>
+                        </Box>
+                    </Box>
+                ]
+            }
+
+            return () => {
+
+            }
+        });
+    }
+
+    catch {
+        
+    }
+
+    return (
+        <>
+            <Helmet>
+                <title>
+                    {data.title} | The Herbal Digest
+                </title>
+                <meta name = 'description' content = {data.description} />
+                <meta property = "og:title" content = {data.title + ' | The Herbal Digest'} />
+                <meta property = "og:description" content = {data.description}  />
+                <meta name = "twitter:title" content = {data.title + ' | The Herbal Digest'} />
+                <meta name = "twitter:description" content = {data.description}  />
+            </Helmet>
+            <div>
+                {width >= 750 ?
+                    <Box position = 'relative' style = {{display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center'}} mt = '15vh'>
+                        <Box style = {{width: '100vw', height: '85vh', display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', color: 'white'}}>
+                            <Fade in timeout = {2400}>
+                                <img src = {data.image} alt = {data.alt_text} style = {{width: '60vw', height: '85vh', objectFit: 'cover', objectPosition: 'center', filter: 'brightness(0.85)'}} />
+                            </Fade>
+                            <Box style = {{width: '40%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'justify'}}>
+                                <Fade in timeout = {800}>
+                                    <Typography variant = 'h1' fontFamily = 'Segoe UI, sans-serif' fontSize = '5vw' fontWeight = 'regular' align = 'center' style = {{width: '36vw'}}>
+                                        {data.title}
+                                    </Typography>
+                                </Fade>
+                                <Fade in timeout = {800} style = {{transitionDelay: '400ms'}}>
+                                    <Typography variant = 'body1' fontFamily = 'Segoe UI, sans-serif' fontSize = '1.5vw' fontWeight = 'lighter' fontStyle = 'italic' align = 'center' style = {{width: '36vw'}} mt = '1.5%' mb = '6%'>
+                                        {data.scientific_name}
+                                    </Typography>
+                                </Fade>
+                                <Fade in timeout = {1600} style = {{transitionDelay: '800ms'}}>
+                                    <Typography variant = 'body1' fontSize = '1.5vw' align = 'justify' style = {{width: '30vw'}}>
+                                        {data.overview}
+                                    </Typography>
+                                </Fade>
+                            </Box>
+                            <Typography variant = 'body2' style = {{position: 'absolute', color: '#bababa', justifySelf: 'flex-start', alignSelf: 'flex-end'}} sx = {{paddingLeft: 0.5, textShadow: '0px 0px 10px black'}}>
+                                {data.attribution}
+                            </Typography>
+                        </Box>
+                    </Box>
+                :
+                    <Box style = {{width: width, height: height, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center'}}>
+                        <Box style = {{width: width, height: height * 0.40, display: 'grid'}}>    
+                            <Fade in timeout = {2400}>
+                                <img src = {data.image} alt = {data.alt_text} style = {{width: width, height: height * 0.40, objectFit: 'cover', objectPosition: 'center', filter: 'brightness(0.85)'}} />
+                            </Fade>
+                            <Typography variant = 'body2' style = {{position: 'absolute', color: '#bababa', justifySelf: 'flex-start', alignSelf: 'flex-end'}} sx = {{paddingLeft: 0.5, textShadow: '0px 0px 10px rgba(23, 23, 23, 0.70)'}}>
+                                {data.attribution}
+                            </Typography>
+                        </Box>
+                        <Box style = {{width: width, height: '60%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'justify', color: 'white'}}>
+                            <Fade in timeout = {800}>
+                                <Typography variant = 'h1' fontFamily = 'Segoe UI, sans-serif' fontSize = '5vh' fontWeight = 'regular' align = 'center' style = {{width: '80%'}}>
+                                    {data.title}
+                                </Typography>
+                            </Fade>
+                            <Fade in timeout = {800} style = {{transitionDelay: '400ms'}}>
+                                <Typography variant = 'body1' fontFamily = 'Segoe UI, sans-serif' fontSize = '2vh' fontWeight = 'lighter' fontStyle = 'italic' align = 'center' style = {{width: '80%'}} mt = '1.5%' mb = '4.5%'>
+                                    {data.scientific_name}
+                                </Typography>
+                            </Fade>
+                            <Fade in timeout = {1600} style = {{transitionDelay: '800ms'}}>
+                                <Typography variant = 'body1' fontSize = '2vh' align = 'justify' style = {{width: '80%'}}>
+                                    {data.overview}
+                                </Typography>
+                            </Fade>
+                        </Box>
+                        
+                    </Box>
+                }
+                <Box style = {{width: windowWidth, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'justify', backgroundColor: 'white'}}  pb = '6%'>
+                    <Typography variant = 'h2' mt = '6%'>
+                        Medicinal Properties
+                    </Typography>
+                    <Box style = {{maxWidth: width >= 750 ? '75%' : '80%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center'}}> 
+                        {data.medicinal_properties.map((i, index) => (
+                            <Typography key = {index} variant = 'body1' alignSelf = 'flex-start' mt = '1.5%' mb = '1.5%'>
+                                {i}
+                            </Typography>
+                        ))}
+                    </Box>
+                    <Typography variant = 'h2' mt = '3%'>
+                        Applications
+                    </Typography>
+                    <Box style = {{maxWidth: width >= 750 ? '70%' : '80%'}}> 
+                        <ul style = {{listStyle: 'circle', fontFamily: 'Quicksand', fontSize: width >= 750 ? '1.5vw' : 12, margin: 0, padding: 0}}>
+                            {data.applications.map((i, index_1) => (
+                                <li key = {index_1}>
+                                    <Typography variant = 'body1' mt = '1.5%' mb = '1.5%'>
+                                        {Object.entries(i.title).sort((a, b) => a[0] > b[0] ? 1 : a[0] < b[0] ? -1 : 0).map((j, index_2) => (
+                                            <React.Fragment key = {j[0]}>
+                                                {j[1] === '' ?
+                                                    <strong>
+                                                        {j[0]}
+                                                    </strong>
+                                                :
+                                                    <Link to = {'/remedies/' + j[1]} style = {{color: 'black', fontWeight: 'bold'}}>
+                                                        {j[0]}
+                                                    </Link>
+                                                }
+                                                {Object.keys(i.title).length === 2 && index_2 === 0 ?
+                                                    <strong>
+                                                        {' and '}
+                                                    </strong>
+                                                :
+                                                    null
+                                                }
+                                                {Object.keys(i.title).length > 2 ?
+                                                    <>
+                                                        {index_2 < Object.keys(i.title).length - 1 ?
+                                                            <strong>
+                                                                {', '}
+                                                            </strong>
+                                                        :
+                                                            null
+                                                        }
+                                                        {index_2 === Object.keys(i.title).length - 2 ?
+                                                            <strong>
+                                                                {'and '}
+                                                            </strong>
+                                                        :
+                                                            null
+                                                        }
+                                                    </>
+                                                :
+                                                    null
+                                                }
+                                            </React.Fragment>
+                                        ))}
+                                        : {i.text}
+                                    </Typography>
+                                </li>
+                            )).sort((a, b) => a.props.children.props.children[0][0].key > b.props.children.props.children[0][0].key ? 1 : a.props.children.props.children[0][0].key < b.props.children.props.children[0][0].key ? -1 : 0)}
+                        </ul>
+                    </Box>
+                    <Typography variant = 'h2' mt = '3%'>
+                        Safety Considerations
+                    </Typography>
+                    <Typography variant = 'body1' style = {{width: width >= 750 ? '75%' : '80%'}} mt = '1.5%'>
+                        {data.safety_considerations.subtext}
+                    </Typography>
+                    <Box style = {{maxWidth: width >= 750 ? '70%' : '80%'}}>
+                        <ul style = {{listStyle: 'square', fontFamily: 'Quicksand', fontSize: width >= 750 ? '1.5vw' : 12, margin: 0, padding: 0}}>
+                            {data.safety_considerations.body.map((i, index) => (
+                                <li key = {index}>
+                                    <Typography variant = 'body1' mt = '1.5%' mb = '1.5%'>
+                                        <strong>{i.title}</strong>: {i.text}
+                                    </Typography>
+                                </li>
+                            ))}
+                        </ul>
+                    </Box>
+                    <Typography variant = 'body1' fontSize = {width >= 750 ? '1.75vw' : '2vh'} fontStyle = 'italic' align = 'center' style = {{maxWidth: width >= 750 ? '75%' : '80%'}} mt = '4.5%'>
+                        It is advisable to consult a healthcare professional or aromatherapist for personalized advice before using any herbal treatment, especially if you have any underlying medical conditions or are pregnant or breastfeeding.
+                    </Typography>
+                    {Object.keys(shop_map).length > 0 || shop_list.length > 0 ? 
+                        <>
+                            <Typography variant = 'h2' mt = '4.5%'>
+                                Recommended Products
+                            </Typography>
+                            <Typography variant = 'body1' fontStyle = 'italic' style = {{maxWidth: '75%'}} mt = '1.5%' mb = '1.5%'>
+                                As an Amazon affiliate, we may earn a commission from qualifying purchases.
+                            </Typography>
+                            {width >= 750 ?
+                                <Box style = {{width: '80%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', alignItems: 'center'}}>
+                                    {Object.keys(shop_map).length === 1 ?
+                                        <Carousel height = '28vw' indicators = {false} navButtonsAlwaysInvisible sx = {{width: '100%'}}>
+                                            {Object.keys(shop_map).map((i, index_1) => (
+                                                <Box key = {index_1} style = {{width: '100%', display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-start'}}>
+                                                    {shop_map[i].map((j, index_2) => (
+                                                        <React.Fragment key = {index_2}>
+                                                            {j}
+                                                        </React.Fragment>
+                                                    ))}
+                                                </Box>
+                                            ))}
+                                        </Carousel>
+                                    :
+                                        Object.keys(shop_map).length === 2 ?
+                                            <Carousel height = '28vw' animation = 'slide' duration = {800} onChange = {(event) => setPage1(!page1)} index = {1} changeOnFirstRender autoPlay = {false} swipe = {false} navButtonsAlwaysVisible navButtonsProps = {{style: {width: '3.5vw', height: '3.5vw', color: 'white', backgroundColor: 'rgba(81, 81, 81, 1)', filter: 'none', ':hover': {backgroundColor: 'rgba(197, 197, 197, 1)'}}}} indicatorContainerProps = {{style: {height: '3vw', display: 'flex', flexDirection: 'row-reverse', justifyContent: 'center', alignItems: 'center'}}} indicatorIconButtonProps = {{style: {color: 'rgba(197, 197, 197, 1)', pointerEvents: 'none', cursor: 'default'}}} activeIndicatorIconButtonProps = {{style: {color: 'rgba(81, 81, 81, 1)', pointerEvents: 'none', cursor: 'default'}}} sx = {{width: '100%', transition: 'none', '& .css-hn784z button': {visibility: page1 ? 'hidden' : 'visible'}, '& .css-1abc02a button': {visibility: page1 ? 'visible' : 'hidden'}, '& .css-hn784z:hover button': {opacity: 1}, '& .css-1abc02a:hover button': {opacity: 1}}}>
+                                                {Object.keys(shop_map).sort((a, b) => a < b ? 1 : a > b ? -1 : 0).map((i, index_1) => (
+                                                    <Box key = {index_1} style = {{width: '66vw', display: 'flex', flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'flex-start'}} sx = {{marginLeft: '7vw'}}>
+                                                        {shop_map[i].map((j, index_2) => (
+                                                            <React.Fragment key = {index_2}>
+                                                                {j}
+                                                            </React.Fragment>
+                                                        ))}
+                                                    </Box>
+                                                ))}
+                                            </Carousel>
+                                        :
+                                            <Carousel height = '28vw' animation = 'slide' duration = {800} cycleNavigation = {false} changeOnFirstRender autoPlay = {false} swipe = {false} navButtonsAlwaysVisible navButtonsProps = {{style: {width: '3.5vw', height: '3.5vw', color: 'white', backgroundColor: 'rgba(81, 81, 81, 1)', filter: 'none', ':hover': {backgroundColor: 'rgba(197, 197, 197, 1)'}}}} indicatorContainerProps = {{style: {height: '3vw', display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center'}}} indicatorIconButtonProps = {{style: {color: 'rgba(197, 197, 197, 1)', pointerEvents: 'none', cursor: 'default'}}} activeIndicatorIconButtonProps = {{style: {color: 'rgba(81, 81, 81, 1)', pointerEvents: 'none', cursor: 'default'}}} sx = {{width: '100%', transition: 'none', '& .css-hn784z:hover button': {opacity: 1}, '& .css-1abc02a:hover button': {opacity: 1}}}>
+                                                {Object.keys(shop_map).map((i, index_1) => (
+                                                    <Box key = {index_1} style = {{width: '66vw', display: 'flex', flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'flex-start'}} sx = {{marginLeft: '7vw'}}>
+                                                        {shop_map[i].map((j, index_2) => (
+                                                            <React.Fragment key = {index_2}>
+                                                                {j}
+                                                            </React.Fragment>
+                                                        ))}
+                                                    </Box>
+                                                ))}
+                                            </Carousel>
+                                    }
+                                </Box>
+                            :
+                                <Box style = {{width: '85%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center'}} mt = '3%'>
+                                    {shop_list.length === 1 ?
+                                        <Carousel height = {width * 0.60} indicators = {false} navButtonsAlwaysInvisible sx = {{width: '100%'}}>
+                                            {shop_list.map((i, index) => (
+                                                i
+                                            ))}
+                                        </Carousel>
+                                    :
+                                        shop_list.length === 2 ?
+                                            <Carousel height = {width * 0.60} animation = 'slide' duration = {800} onChange = {(event) => setPage1(!page1)} index = {1} changeOnFirstRender autoPlay = {false} swipe = {false} navButtonsAlwaysVisible navButtonsProps = {{style: {width: '3.5vh', height: '3.5vh', color: 'white', backgroundColor: 'rgba(81, 81, 81, 1)', filter: 'none', ':hover': {backgroundColor: 'rgba(197, 197, 197, 1)'}}}} indicatorContainerProps = {{style: {height: height * 0.10, display: 'flex', flexDirection: 'row-reverse', justifyContent: 'center', alignItems: 'center'}}} indicatorIconButtonProps = {{style: {color: 'rgba(197, 197, 197, 1)', pointerEvents: 'none', cursor: 'default'}}} activeIndicatorIconButtonProps = {{style: {color: 'rgba(81, 81, 81, 1)', pointerEvents: 'none', cursor: 'default'}}} sx = {{width: '100%', transition: 'none', '& .css-hn784z button': {visibility: page1 ? 'hidden' : 'visible'}, '& .css-1abc02a button': {visibility: page1 ? 'visible' : 'hidden'}, '& .css-hn784z:hover button': {opacity: 1}, '& .css-1abc02a:hover button': {opacity: 1}}}>
+                                                {shop_list.map((i, index) => (
+                                                    i
+                                                ))}
+                                            </Carousel>
+                                        :
+
+                                            <Carousel height = {width * 0.60} animation = 'slide' duration = {800} cycleNavigation = {false} changeOnFirstRender autoPlay = {false} navButtonsAlwaysVisible navButtonsProps = {{style: {width: '3.5vh', height: '3.5vh', color: 'white', backgroundColor: 'rgba(81, 81, 81, 1)', filter: 'none', ':hover': {backgroundColor: 'rgba(81, 81, 81, 1)'}}}} indicatorContainerProps = {{style: {height: height * 0.10, display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center'}}} indicatorIconButtonProps = {{style: {color: 'rgba(197, 197, 197, 1)', pointerEvents: 'none', cursor: 'default'}}} activeIndicatorIconButtonProps = {{style: {color: 'rgba(81, 81, 81, 1)', pointerEvents: 'none', cursor: 'default'}}} sx = {{width: '100%', transition: 'none', '& .css-hn784z:hover button': {opacity: '1!important'}, '& .css-1abc02a:hover button': {opacity: '1!important'}}}>
+                                                {shop_list.slice(0, 10).map((i, index) => (
+                                                    i
+                                                ))}
+                                            </Carousel>
+                                    }
+                                </Box>
+                            }
+                        </>
+                    :
+                        null
+                    }
+                </Box>
+            </div>
+        </>
+    );
+};
+
+
+export default BotanicalsPage;
